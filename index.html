@@ -15,6 +15,47 @@ header{background:var(--ink);padding:18px 32px;display:flex;align-items:center;j
 header h1{font-family:'Playfair Display',serif;font-size:20px;color:var(--paper);}
 header h1 em{color:var(--red);font-style:normal;}
 header .sub{color:#888;font-size:11px;font-family:'DM Mono',monospace;}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  async function scaricaTutteZip(risultati) {
+  const btn = document.getElementById('btnScaricaZip');
+  const zip = new JSZip();
+  let ok = 0, falliti = [];
+
+  btn.disabled = true;
+
+  for (let i = 0; i < risultati.length; i++) {
+    const { ean, titolo, url } = risultati[i];
+    btn.textContent = `Scarico ${i + 1}/${risultati.length}...`;
+
+    try {
+      // Passa attraverso il proxy weserv.nl per bypassare il CORS
+      const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(url.replace(/^https?:\/\//, ''))}`;
+      const res = await fetch(proxyUrl);
+      if (!res.ok) throw new Error('fetch fallito');
+      const blob = await res.blob();
+      const nomeFile = `${ean}${titolo ? '_' + titolo.replace(/[^a-z0-9]/gi, '_').slice(0, 40) : ''}.jpg`;
+      zip.file(nomeFile, blob);
+      ok++;
+    } catch (e) {
+      falliti.push(ean);
+    }
+  }
+
+  btn.textContent = 'Genero lo zip...';
+  const content = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(content);
+  a.download = `copertine_${new Date().toISOString().slice(0,10)}.zip`;
+  a.click();
+
+  btn.disabled = false;
+  btn.textContent = '📦 Scarica tutte (ZIP)';
+
+  if (falliti.length) {
+    alert(`Fatto! ${ok} copertine scaricate. ${falliti.length} non recuperabili: ${falliti.join(', ')}`);
+  }
+}
+<button id="btnScaricaZip" onclick="scaricaTutteZip(risultatiTrovati)">📦 Scarica tutte (ZIP)</button>
 .main{display:grid;grid-template-columns:320px 1fr;min-height:calc(100vh - 63px);}
 .left{background:white;border-right:1px solid var(--border);padding:24px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;}
 .right{padding:24px;overflow-y:auto;}
