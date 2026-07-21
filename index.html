@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
 :root{--ink:#1a1410;--paper:#f5f0e8;--cream:#ede5d5;--red:#c8452a;--gold:#b8860b;--green:#2e7d32;--muted:#7a6f62;--border:#d4c9b8;}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -147,6 +148,7 @@ textarea:focus{outline:none;border-color:var(--red);background:white;}
 
     <button class="btn btn-red" id="btnCSV" onclick="exportCSV()" disabled>⬇️ Esporta CSV</button>
     <button class="btn btn-outline" id="btnXLS" onclick="exportExcel()" disabled>📊 Esporta Excel</button>
+    <button class="btn btn-outline" id="btnZip" onclick="scaricaTuttoZip()" disabled>📦 Scarica ZIP</button>
   </div>
 
   <div class="right">
@@ -306,6 +308,7 @@ async function startSearch(){
   btn.disabled=false;
   document.getElementById('btnCSV').disabled=false;
   document.getElementById('btnXLS').disabled=false;
+  document.getElementById('btnZip').disabled=false;
   document.getElementById('pText').textContent=`✅ Completato — ${found}/${results.length} trovate`;
 }
 
@@ -398,6 +401,44 @@ function exportExcel(){
   ws['!cols']=[{wch:18},{wch:80},{wch:16},{wch:12}];
   const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Copertine');
   XLSX.writeFile(wb,'copertine_'+today()+'.xlsx');
+  async function scaricaTuttoZip(){
+  const disponibili = results.filter(r => (r.status==='found'||r.status==='manual') && r.imgUrl);
+  if(!disponibili.length){ alert('Nessuna copertina disponibile da scaricare.'); return; }
+
+  const btn = document.getElementById('btnZip');
+  const origText = btn.textContent;
+  btn.disabled = true;
+
+  const zip = new JSZip();
+  let ok = 0, falliti = [];
+
+  for(let i=0; i<disponibili.length; i++){
+    const r = disponibili[i];
+    btn.textContent = `Scarico ${i+1}/${disponibili.length}...`;
+    try{
+      const bare = r.imgUrl.replace(/^https?:\/\//,'');
+      const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(bare)}&output=jpg`;
+      const res = await fetch(proxyUrl);
+      if(!res.ok) throw new Error('fetch fallito');
+      const blob = await res.blob();
+      zip.file(`${r.ean}.jpg`, blob);
+      ok++;
+    }catch(e){
+      falliti.push(r.ean);
+    }
+  }
+
+  btn.textContent = 'Genero lo zip...';
+  const content = await zip.generateAsync({type:'blob'});
+  dl(content, 'copertine_'+today()+'.zip');
+
+  btn.disabled = false;
+  btn.textContent = origText;
+
+  if(falliti.length){
+    alert(`Fatto! ${ok} copertine scaricate.\n${falliti.length} non recuperabili: ${falliti.join(', ')}`);
+  }
+}
 }
 
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
