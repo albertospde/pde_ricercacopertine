@@ -405,14 +405,21 @@ function exportExcel(){
 }
 
 // ── Download di tutte le copertine trovate in un unico file ZIP ──────────────
-// Scarica un'immagine: prima diretta (funziona se la sorgente ha CORS), poi via proxy weserv.
-// Feltrinelli non ha CORS e blocca weserv (403): per quelle si ripiega sulle sorgenti alternative.
+// Scarica un'immagine: prima diretta (funziona se la sorgente ha CORS), poi via edge function
+// proxy-copertine (Supabase, serve il login), infine via proxy weserv.
+// Feltrinelli non ha CORS e blocca weserv (403): funziona solo tramite proxy-copertine.
 async function fetchImgBlob(url){
   const bare = url.replace(/^https?:\/\//,'');
-  const tentativi = [url, `https://images.weserv.nl/?url=${encodeURIComponent(bare)}&output=jpg`];
-  for(const u of tentativi){
+  const { data: { session } } = await sbAuth.auth.getSession();
+  const tentativi = [[url, {}]];
+  if(session) tentativi.push([
+    `${SUPABASE_URL}/functions/v1/proxy-copertine?url=${encodeURIComponent(url)}`,
+    { headers: { Authorization: `Bearer ${session.access_token}`, apikey: SUPABASE_KEY } },
+  ]);
+  tentativi.push([`https://images.weserv.nl/?url=${encodeURIComponent(bare)}&output=jpg`, {}]);
+  for(const [u, opts] of tentativi){
     try{
-      const res = await fetch(u);
+      const res = await fetch(u, opts);
       if(!res.ok) continue;
       const blob = await res.blob();
       if(blob.type.startsWith('image/') && blob.size > 1000) return blob;
