@@ -405,7 +405,34 @@ function exportExcel(){
 }
 
 // ── Download di tutte le copertine trovate in un unico file ZIP ──────────────
+// Scarica un'immagine: prima diretta (funziona se la sorgente ha CORS), poi via proxy weserv.
+// Feltrinelli non ha CORS e blocca weserv (403): per quelle si ripiega sulle sorgenti alternative.
+async function fetchImgBlob(url){
+  const bare = url.replace(/^https?:\/\//,'');
+  const tentativi = [url, `https://images.weserv.nl/?url=${encodeURIComponent(bare)}&output=jpg`];
+  for(const u of tentativi){
+    try{
+      const res = await fetch(u);
+      if(!res.ok) continue;
+      const blob = await res.blob();
+      if(blob.type.startsWith('image/') && blob.size > 1000) return blob;
+    }catch(e){}
+  }
+  return null;
+}
+
+function urlAlternativi(ean){
+  return [
+    `https://img.ibs.it/img/${ean}L.jpg`,
+    `https://img.ibs.it/img/${ean}M.jpg`,
+    `https://images.mondadoristore.it/immagini/${ean}COP.jpg`,
+    `https://covers.openlibrary.org/b/isbn/${ean}-L.jpg?default=false`,
+  ];
+}
+
 async function scaricaTuttoZip(){
+  const btn = document.getElementById('btnZip');
+  const origText = btn.textContent;
   try{
     if(typeof JSZip === 'undefined'){
       alert('ERRORE: la libreria JSZip non è caricata. Controlla che lo script sia nel <head>.');
@@ -415,41 +442,49 @@ async function scaricaTuttoZip(){
     console.log('Copertine disponibili per lo zip:', disponibili.length, disponibili);
     if(!disponibili.length){ alert('Nessuna copertina disponibile da scaricare.'); return; }
 
-    const btn = document.getElementById('btnZip');
-    const origText = btn.textContent;
     btn.disabled = true;
 
     const zip = new JSZip();
-    let ok = 0, falliti = [];
+    let ok = 0, falliti = [], alternativi = [];
 
     for(let i=0; i<disponibili.length; i++){
       const r = disponibili[i];
       btn.textContent = `Scarico ${i+1}/${disponibili.length}...`;
-      try{
-        const bare = r.imgUrl.replace(/^https?:\/\//,'');
-        const proxyUrl = `https://images.weserv.nl/?url=${encodeURIComponent(bare)}&output=jpg`;
-        const res = await fetch(proxyUrl);
-        if(!res.ok) throw new Error('HTTP ' + res.status);
-        const blob = await res.blob();
+      let blob = await fetchImgBlob(r.imgUrl);
+      if(!blob){
+        for(const alt of urlAlternativi(r.ean)){
+          if(alt === r.imgUrl) continue;
+          blob = await fetchImgBlob(alt);
+          if(blob){ alternativi.push(r.ean); break; }
+        }
+      }
+      if(blob){
         zip.file(`${r.ean}.jpg`, blob);
         ok++;
-      }catch(e){
-        console.error('Fallito EAN', r.ean, e);
+      }else{
+        console.error('Fallito EAN', r.ean, r.imgUrl);
         falliti.push(r.ean);
       }
+    }
+
+    if(!ok){
+      alert(`Nessuna copertina scaricabile (${falliti.length} tentate): lo zip non è stato creato.\nUsa l'export Excel/CSV con i link alle immagini.`);
+      return;
     }
 
     btn.textContent = 'Genero lo zip...';
     const content = await zip.generateAsync({type:'blob'});
     dl(content, 'copertine_'+today()+'.zip');
 
-    btn.disabled = false;
-    btn.textContent = origText;
-
-    alert(`Fatto! ${ok} copertine scaricate.` + (falliti.length ? `\n${falliti.length} non recuperabili: ${falliti.join(', ')}` : ''));
+    alert(`Fatto! ${ok} copertine scaricate.`
+      + (alternativi.length ? `\n${alternativi.length} prese da una sorgente alternativa: ${alternativi.join(', ')}` : '')
+      + (falliti.length ? `\n${falliti.length} non recuperabili: ${falliti.join(', ')}` : ''));
   }catch(err){
     console.error('Errore generale ZIP:', err);
     alert('Errore imprevisto: ' + err.message);
+  }finally{
+    btn.disabled = false;
+    btn.textContent = origText;
   }
 }
 
