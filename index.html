@@ -15,6 +15,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--paper);color:var(--ink);}
 header{background:var(--ink);padding:18px 32px;display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid var(--red);}
 header h1{font-family:'Playfair Display',serif;font-size:20px;color:var(--paper);}
 header h1 em{color:var(--red);font-style:normal;}
+header button{white-space:nowrap;}
 header .sub{color:#888;font-size:11px;font-family:'DM Mono',monospace;}
 .main{display:grid;grid-template-columns:320px 1fr;min-height:calc(100vh - 63px);}
 .left{background:white;border-right:1px solid var(--border);padding:24px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;}
@@ -74,6 +75,8 @@ textarea:focus{outline:none;border-color:var(--red);background:white;}
 .modal input:focus{outline:none;border-color:var(--red);}
 .mhint{font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.6;background:var(--cream);padding:8px;border-radius:4px;}
 .modal-btns{display:flex;gap:8px;}.modal-btns button{flex:1;}
+.pw-label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px;}
+.pw-error{color:var(--red);font-size:12px;min-height:16px;margin:2px 0 10px;}
 
 .login-screen{position:fixed;inset:0;background:#1a2d6b;display:flex;align-items:center;justify-content:center;z-index:999;}
 .login-box{background:#223070;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:40px 36px 32px;width:370px;max-width:90vw;text-align:center;box-shadow:0 8px 40px rgba(0,0,0,0.4);}
@@ -178,6 +181,7 @@ html[data-theme="light"] .login-error{color:#c43d3d;}
       <button class="theme-opt" data-set="light" onclick="setTheme('light')" title="Versione chiara">☀ Chiaro</button>
       <button class="theme-opt" data-set="dark" onclick="setTheme('dark')" title="Versione scura">☾ Scuro</button>
     </div>
+    <button onclick="openPw()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#ccc;padding:6px 14px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;transition:all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">🔑 Cambia password</button>
     <button onclick="doLogout()" style="background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#ccc;padding:6px 14px;border-radius:5px;cursor:pointer;font-family:'DM Sans',sans-serif;font-size:12px;transition:all 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.2)'" onmouseout="this.style.background='rgba(255,255,255,0.1)'">⏏ Esci</button>
   </div>
 </header>
@@ -240,6 +244,27 @@ html[data-theme="light"] .login-error{color:#c43d3d;}
   </div>
 </div>
 
+<div class="overlay" id="pwOverlay">
+  <div class="modal" id="pwForm">
+    <h3>🔑 Cambia password</h3>
+    <label class="pw-label" for="pwOld">Vecchia password</label>
+    <input type="password" id="pwOld" autocomplete="current-password" onkeydown="if(event.key==='Enter')savePw()">
+    <label class="pw-label" for="pwNew">Nuova password</label>
+    <input type="password" id="pwNew" autocomplete="new-password" onkeydown="if(event.key==='Enter')savePw()">
+    <label class="pw-label" for="pwNew2">Ripeti nuova password</label>
+    <input type="password" id="pwNew2" autocomplete="new-password" onkeydown="if(event.key==='Enter')savePw()">
+    <div class="pw-error" id="pwError"></div>
+    <div class="modal-btns">
+      <button class="btn btn-outline" onclick="closePw()">Annulla</button>
+      <button class="btn btn-dark" id="pwBtn" onclick="savePw()">Conferma</button>
+    </div>
+  </div>
+  <div class="modal" id="pwDone" style="display:none;text-align:center;">
+    <h3>✅ Password cambiata con successo</h3>
+    <div class="modal-btns"><button class="btn btn-dark" onclick="closePw()">OK</button></div>
+  </div>
+</div>
+
 <script>
 
 const SUPABASE_URL = 'https://tdflwenlylhctxssatax.supabase.co';
@@ -265,6 +290,45 @@ initAuth();
 async function doLogout() {
   await sbAuth.auth.signOut();
   document.getElementById('loginScreen').style.display = 'flex';
+}
+
+// ── Cambia password (stesso flusso di Giro Manager e delle altre app PDE) ──
+function openPw() {
+  ['pwOld','pwNew','pwNew2'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('pwError').textContent = '';
+  document.getElementById('pwForm').style.display = 'block';
+  document.getElementById('pwDone').style.display = 'none';
+  document.getElementById('pwOverlay').style.display = 'flex';
+  setTimeout(() => document.getElementById('pwOld').focus(), 50);
+}
+function closePw() { document.getElementById('pwOverlay').style.display = 'none'; }
+async function savePw() {
+  const vecchia = document.getElementById('pwOld').value;
+  const nuova = document.getElementById('pwNew').value;
+  const ripeti = document.getElementById('pwNew2').value;
+  const errEl = document.getElementById('pwError');
+  const btn = document.getElementById('pwBtn');
+  if (btn.disabled) return;
+  errEl.textContent = '';
+  if (!vecchia || !nuova || !ripeti) { errEl.textContent = 'Compila tutti i campi.'; return; }
+  if (nuova.length < 8) { errEl.textContent = 'La nuova password deve avere almeno 8 caratteri.'; return; }
+  if (nuova !== ripeti) { errEl.textContent = 'Le due nuove password non coincidono.'; return; }
+  if (nuova === vecchia) { errEl.textContent = 'La nuova password deve essere diversa dalla vecchia.'; return; }
+  btn.disabled = true;
+  try {
+    const { data: { user } } = await sbAuth.auth.getUser();
+    if (!user) { errEl.textContent = 'Sessione scaduta: esci e rientra.'; return; }
+    const { error: errLogin } = await sbAuth.auth.signInWithPassword({ email: user.email, password: vecchia });
+    if (errLogin) { errEl.textContent = 'La vecchia password non è corretta.'; return; }
+    const { error } = await sbAuth.auth.updateUser({ password: nuova });
+    if (error) { errEl.textContent = error.message; return; }
+    document.getElementById('pwForm').style.display = 'none';
+    document.getElementById('pwDone').style.display = 'block';
+  } catch (e) {
+    errEl.textContent = 'Errore: ' + e.message;
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 let results=[], currentFilter='tutti', modalEan=null;
@@ -558,8 +622,9 @@ async function scaricaTuttoZip(){
   }
 }
 
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closePw();}});
 document.getElementById('overlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closeModal();});
+document.getElementById('pwOverlay').addEventListener('click',e=>{if(e.target===e.currentTarget)closePw();});
 </script>
 
 <script>
