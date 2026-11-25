@@ -152,6 +152,8 @@ html[data-theme="light"] .login-error{color:#c43d3d;}
   window.addEventListener('storage', function (e) { if (e.key === 'pde-hub-theme') applica(e.newValue); });
 })();
 </script>
+<script>/* Dentro il PDE Hub (iframe) il menu utente lo ha già la barra del Hub (stesso account, stesso tema) */try{if(window.self!==window.top)document.documentElement.classList.add('pde-in-hub')}catch(e){document.documentElement.classList.add('pde-in-hub')}</script>
+<style>.pde-in-hub #pde-hdr-user{display:none!important}</style>
 </head>
 <body>
 
@@ -177,7 +179,7 @@ html[data-theme="light"] .login-error{color:#c43d3d;}
 <header>
   <div class="header-logo-wrap"><div class="pde-logo" role="img" aria-label="PDE Copertine" style="font-size:13px"><div class="pl-text"><div class="pl-name"><b>PDE</b><span>COPERTINE</span></div><div class="pl-tag"><i class="c0">CERCA.</i><em>I</em><i class="c1">TROVA.</i><em>I</em><i class="c2">SCARICA.</i></div></div><div class="pl-wing"></div></div></div>
   <span class="sub">Feltrinelli · IBS · Mondadori · Google Books · OpenLibrary</span>
-  <div style="display:flex;align-items:center;gap:10px;">
+  <div id="pde-hdr-user" style="display:flex;align-items:center;gap:10px;">
     <div class="theme-switch" role="group" aria-label="Tema">
       <button class="theme-opt" data-set="light" onclick="setTheme('light')" title="Versione chiara">☀ Chiaro</button>
       <button class="theme-opt" data-set="dark" onclick="setTheme('dark')" title="Versione scura">☾ Scuro</button>
